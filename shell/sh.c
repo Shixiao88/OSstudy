@@ -97,16 +97,13 @@ runcmd(struct cmd *cmd)
     // Your code here ...
     
     // close the stdin/stdout, then open the file will be stdin/stdout
-    int stdin_copy = dup(0);
-    int stdout_copy = dup(1);
+    int std_copy = dup(rcmd->fd);
     int f = Close(rcmd->fd);
-    Open(rcmd->file, rcmd->mode);
+    Open(rcmd->file, rcmd->mode | O_CREAT);
     runcmd(rcmd->cmd);
     Close(f);
-    dup2(stdin_copy, 0);
-    dup2(stdout_copy, 1);
-    Close(stdin_copy);
-    Close(stdout_copy);
+    dup2(std_copy, rcmd->fd);
+    Close(std_copy);
     break;
 
   case '|':
