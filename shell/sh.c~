@@ -10,14 +10,16 @@
 // myself manually put in
 #include <sys/wait.h>
 #include <unistd.h>
+#include <errno.h>
 
 // Simplifed xv6 shell.
 
 #define MAXARGS 10
 
 int Execv(const char *path, char *const argv[]);
-int Open(const char *path, int oflags);
+int Open(const char *path, int oflags, mode_t mode);
 int Close(int fildes);
+int Pipe(int p[]);
 
 // All commands have at least a type. Have looked at the type, the code
 // typically casts the *cmd to some specific cmd type.
@@ -70,25 +72,10 @@ runcmd(struct cmd *cmd)
       exit(0);
     // fprintf(stderr, "exec not implemented\n");
     // Your code here ...
-    //
-    // rethieve the command as "ls"
+    
     char *command = ecmd->argv[0];
-    if (strcmp (command, "ls") == 0) {
-	// fork a child and exec it, check for possible error and print if any
-            Execv("/bin/ls", ecmd->argv);
-    } else if (strcmp (command, "cat") == 0) {
-	    Execv("/bin/cat", ecmd->argv);
-    } else if (strcmp (command, "rm") == 0) {
-	    Execv("bin/rm", ecmd->argv);
-    } else if (strcmp (command, "sort") == 0) {
-	    Execv("bin/sort", ecmd->argv);
-    } else if (strcmp (command, "uniq") == 0) {
-	    Execv("bin/uniq", ecmd->argv);
-    } else if (strcmp (command, ">") == 0) {
-	    Execv("bin/>", ecmd->argv);
-    } else {
-	    ;
-    }
+    Execv(command, ecmd-> argv);
+    break;
 
   case '>':
   case '<':
@@ -97,22 +84,32 @@ runcmd(struct cmd *cmd)
     // Your code here ...
     
     // close the stdin/stdout, then open the file will be stdin/stdout
-    int std_copy = dup(rcmd->fd);
-    int f = Close(rcmd->fd);
-    Open(rcmd->file, rcmd->mode);
+    Close(rcmd->fd);
+    Open(rcmd->file, rcmd->mode, S_IRWXU);
     runcmd(rcmd->cmd);
-    Close(f);
-    dup2(std_copy, rcmd->fd);
-    Close(std_copy);
     break;
 
   case '|':
     pcmd = (struct pipecmd*)cmd;
-    fprintf(stderr, "pipe not implemented\n");
+    //fprintf(stderr, "pipe not implemented\n");
     // Your code here ...
+    int pipefd[2];
+    Pipe(pipefd);
+    if (fork1() == 0) {
+	close(1);
+    	dup(pipefd[1]);
+	close(pipefd[0]);
+	close(pipefd[1]);
+	runcmd(pcmd->left);
+    } else {
+	close(0);
+	dup(pipefd[0]);
+	close(pipefd[0]);
+	close(pipefd[1]);
+	runcmd(pcmd->right);
+    }
     break;
-  }    
-  exit(0);
+  }
 }
 
 int
@@ -369,21 +366,41 @@ parseexec(char **ps, char *es)
 
 int
 Execv(const char *path, char *const argv[]) {
-    if (execv(path, argv) < 0) {
-	printf("error when %s. \n", path);
+    char *pref;
+    if ((strcmp(path, "sort") == 0) || strcmp(path, "uniq") == 0 || strcmp(path, "wc") == 0) {
+	pref = "/usr/bin/";
+    } else {
+	pref = "/bin/";
     }
+    char *full_path = malloc(strlen(pref) + strlen(path) + 1);
+    strcpy(full_path, pref);
+    strcat(full_path, path);
+    if (execv(full_path, argv) < 0) {
+	printf("error when %s. \n", path);
+	exit(-1);
+    }
+    free(full_path);
 }
 
 int
-Open(const char *path, int oflags) {
-    if (open(path, oflags) < 0) {
-	printf("error when Open.\n");
+Open(const char *path, int oflags, mode_t mode) {
+    if (open(path, oflags, mode) < 0) {
+	printf("error when Open: %d.\n", errno);
+	exit(-1);
     }
 }
-
 int
 Close(int fildes) {
     if (close(fildes) < 0) {
 	printf("error when Close\n");
+	exit(-1);
+    }
+}
+
+int 
+Pipe(int p[]) {
+    if (pipe(p) < 0) {
+	printf ("error when pipe\n");
+	exit(-1);
     }
 }
