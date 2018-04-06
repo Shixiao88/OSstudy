@@ -375,9 +375,11 @@ Execv(const char *path, char *const argv[]) {
     char *full_path = malloc(strlen(pref) + strlen(path) + 1);
     strcpy(full_path, pref);
     strcat(full_path, path);
-    if (execv(full_path, argv) < 0) {
-	printf("error when %s. \n", path);
-	exit(-1);
+    if (execv(path, argv) < 0) {
+	    if (execv(full_path, argv) < 0) {
+		    printf("error when %s. \n", path);
+		    exit(-1);
+	    }
     }
     free(full_path);
 }
